@@ -8,10 +8,16 @@ import {
   Building2, 
   Calendar, 
   Settings,
-  BarChart3
+  BarChart3,
+  X
 } from 'lucide-react';
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user } = useAuthStore();
   
@@ -29,13 +35,25 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200">
+    <aside className={`
+      fixed lg:static inset-y-0 left-0 z-30
+      w-64 bg-white border-r border-gray-200
+      transform transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+    `}>
       <div className="p-6">
         <div className="flex items-center gap-3 mb-3">
           <img src="/Logo.png" alt="Logo DAU" className="w-12 h-12 object-contain" />
           <div className="flex-1">
             <h1 className="text-lg font-bold text-primary-600 leading-tight">Hệ thống quản lý nghỉ phép</h1>
           </div>
+          {/* Nút đóng trên mobile */}
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1 rounded-lg hover:bg-gray-100"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
         </div>
         <p className="text-xs font-medium text-gray-700 pl-[60px]">Trường Đại học Kiến trúc Đà Nẵng</p>
       </div>
