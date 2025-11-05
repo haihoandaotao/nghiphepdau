@@ -3,6 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import nodemailer from 'nodemailer';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -39,6 +40,134 @@ const upload = multer({
     }
   }
 });
+
+// Email configuration
+const createEmailTransporter = () => {
+  // Check if SMTP config exists
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  } else {
+    // Mock transporter for development (logs to console)
+    return nodemailer.createTransport({
+      jsonTransport: true,
+    });
+  }
+};
+
+const emailTransporter = createEmailTransporter();
+
+// Email sending function
+const sendLeaveRequestNotification = async (leaveRequest: any, employee: any) => {
+  try {
+    // Find HR and ADMIN users
+    const hrUsers = users.filter((u: any) => u.role === 'HR' || u.role === 'ADMIN');
+    
+    // Find manager if employee has department
+    let managerUser = null;
+    if (employee.departmentId) {
+      const department = departments.find((d: any) => d.id === employee.departmentId);
+      if (department?.managerId) {
+        managerUser = users.find((u: any) => u.id === department.managerId);
+      }
+    }
+    
+    // Collect all recipients
+    const recipients = [...hrUsers];
+    if (managerUser) {
+      recipients.push(managerUser);
+    }
+    
+    if (recipients.length === 0) {
+      console.log('⚠️  No recipients found for leave request notification');
+      return;
+    }
+    
+    const recipientEmails = recipients.map((u: any) => u.email).join(', ');
+    
+    const leaveTypeName = leaveTypes.find((lt: any) => lt.id === leaveRequest.leaveTypeId)?.name || 'Không xác định';
+    
+    const emailContent = {
+      from: process.env.SMTP_FROM || 'noreply@dau.edu.vn',
+      to: recipientEmails,
+      subject: `[Đơn nghỉ phép mới] ${employee.fullName} - ${leaveTypeName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: #dc2626; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Thông báo đơn nghỉ phép mới</h1>
+          </div>
+          
+          <div style="padding: 20px; background-color: #f9fafb;">
+            <h2 style="color: #1f2937;">Thông tin nhân viên</h2>
+            <p><strong>Họ tên:</strong> ${employee.fullName}</p>
+            <p><strong>Email:</strong> ${employee.email}</p>
+            ${employee.department ? `<p><strong>Phòng ban:</strong> ${employee.department.name}</p>` : ''}
+            
+            <h2 style="color: #1f2937; margin-top: 30px;">Chi tiết đơn nghỉ phép</h2>
+            <p><strong>Loại nghỉ phép:</strong> ${leaveTypeName}</p>
+            <p><strong>Từ ngày:</strong> ${new Date(leaveRequest.startDate).toLocaleDateString('vi-VN')}</p>
+            <p><strong>Đến ngày:</strong> ${new Date(leaveRequest.endDate).toLocaleDateString('vi-VN')}</p>
+            <p><strong>Số ngày:</strong> ${leaveRequest.totalDays} ngày</p>
+            ${leaveRequest.reason ? `<p><strong>Lý do:</strong> ${leaveRequest.reason}</p>` : ''}
+            
+            <div style="margin-top: 30px; padding: 15px; background-color: #fef3c7; border-left: 4px solid #f59e0b;">
+              <p style="margin: 0; color: #92400e;">
+                <strong>Lưu ý:</strong> Vui lòng vào hệ thống để xem chi tiết và phê duyệt đơn nghỉ phép.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/approvals" 
+                 style="background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Xem chi tiết và phê duyệt
+              </a>
+            </div>
+          </div>
+          
+          <div style="padding: 20px; text-align: center; background-color: #f3f4f6; color: #6b7280; font-size: 12px;">
+            <p>Email này được gửi tự động từ Hệ thống quản lý nghỉ phép - Trường Đại học Kiến trúc Đà Nẵng</p>
+          </div>
+        </div>
+      `,
+      text: `
+Thông báo đơn nghỉ phép mới
+
+Nhân viên: ${employee.fullName}
+Email: ${employee.email}
+${employee.department ? `Phòng ban: ${employee.department.name}` : ''}
+
+Chi tiết đơn nghỉ phép:
+- Loại nghỉ phép: ${leaveTypeName}
+- Từ ngày: ${new Date(leaveRequest.startDate).toLocaleDateString('vi-VN')}
+- Đến ngày: ${new Date(leaveRequest.endDate).toLocaleDateString('vi-VN')}
+- Số ngày: ${leaveRequest.totalDays} ngày
+${leaveRequest.reason ? `- Lý do: ${leaveRequest.reason}` : ''}
+
+Vui lòng vào hệ thống để xem chi tiết và phê duyệt đơn nghỉ phép.
+      `,
+    };
+    
+    const result: any = await emailTransporter.sendMail(emailContent);
+    
+    // Log for mock/development mode
+    if (result.message) {
+      console.log('📧 [MOCK EMAIL] Would send to:', recipientEmails);
+      console.log('📋 Subject:', emailContent.subject);
+      console.log('📨 Message preview:', JSON.parse(result.message).html.substring(0, 200) + '...');
+    } else {
+      console.log('✅ Email sent successfully to:', recipientEmails);
+    }
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+  }
+};
 
 app.use(cors({ 
   origin: [
@@ -580,7 +709,7 @@ app.get('/api/leave-requests/my-requests', (req, res) => {
   });
 });
 
-app.post('/api/leave-requests', upload.array('attachments', 5), (req, res) => {
+app.post('/api/leave-requests', upload.array('attachments', 5), async (req: any, res) => {
   const files = req.files as Express.Multer.File[];
   
   // Lưu thông tin file đính kèm
@@ -592,16 +721,32 @@ app.post('/api/leave-requests', upload.array('attachments', 5), (req, res) => {
     mimetype: file.mimetype
   })) : [];
 
+  // Get employee info
+  const employee = users.find((u: any) => u.id === req.body.userId) || req.user;
+  const leaveType = leaveTypes.find((lt: any) => lt.id === req.body.leaveTypeId);
+
   const newRequest = {
     id: Date.now().toString(),
     ...req.body,
     attachments: attachments,
     status: 'PENDING',
     createdAt: new Date().toISOString(),
-    user: { id: '1', fullName: 'Test User', email: 'test@test.com' },
-    leaveType: { id: '1', name: 'Phép năm', code: 'ANNUAL' },
+    user: employee ? { 
+      id: employee.id, 
+      fullName: employee.fullName, 
+      email: employee.email,
+      department: employee.departmentId ? departments.find((d: any) => d.id === employee.departmentId) : null
+    } : { id: '1', fullName: 'Test User', email: 'test@test.com' },
+    leaveType: leaveType ? { id: leaveType.id, name: leaveType.name, code: leaveType.code } : { id: '1', name: 'Phép năm', code: 'ANNUAL' },
   };
   leaveRequests.push(newRequest);
+  
+  // Send email notification
+  if (employee) {
+    sendLeaveRequestNotification(newRequest, employee).catch(err => {
+      console.error('Failed to send email notification:', err);
+    });
+  }
   
   res.status(201).json({
     message: 'Leave request created successfully',
