@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 
 const app: Application = express();
-const PORT = 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Tạo thư mục uploads nếu chưa tồn tại
 const uploadsDir = path.join(__dirname, '../../uploads');
@@ -756,7 +756,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Mock Server is running on port ${PORT}`);
   console.log(`📍 Test the API at: http://localhost:${PORT}/api/health`);
 });
