@@ -37,6 +37,7 @@ export default function UserManagement() {
   const [importData, setImportData] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedRole, setSelectedRole] = useState<'EMPLOYEE' | 'MANAGER' | 'HR' | 'ADMIN'>('EMPLOYEE');
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     email: '',
     fullName: '',
@@ -136,6 +137,47 @@ export default function UserManagement() {
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    }
+  };
+
+  // Checkbox handlers
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const toggleSelectUser = (userId: string) => {
+    const newSelected = new Set(selectedUsers);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUsers(newSelected);
+  };
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedUsers.size === 0) {
+      toast.warning('Vui lòng chọn ít nhất một nhân viên');
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedUsers.size} nhân viên đã chọn?`)) {
+      return;
+    }
+
+    try {
+      const deletePromises = Array.from(selectedUsers).map(id => api.delete(`/users/${id}`));
+      await Promise.all(deletePromises);
+      toast.success(`Đã xóa ${selectedUsers.size} nhân viên thành công`);
+      setSelectedUsers(new Set());
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra khi xóa');
     }
   };
 
@@ -253,7 +295,7 @@ export default function UserManagement() {
     }
   };
 
-  // Import users to server
+  // Import users to server (with upsert - update or insert)
   const handleImportUsers = async () => {
     if (importData.length === 0) {
       toast.error('Không có dữ liệu để import');
@@ -261,8 +303,13 @@ export default function UserManagement() {
     }
 
     try {
-      const response = await api.post('/users/bulk', { users: importData });
-      toast.success(`Đã import thành công ${response.data.successCount}/${importData.length} nhân viên`);
+      const response = await api.post('/users/bulk-upsert', { users: importData });
+      
+      const successCount = response.data.successCount || 0;
+      const updatedCount = response.data.updatedCount || 0;
+      const createdCount = response.data.createdCount || 0;
+      
+      toast.success(`Import thành công: ${createdCount} nhân viên mới, ${updatedCount} nhân viên cập nhật`);
       
       if (response.data.errors && response.data.errors.length > 0) {
         console.log('Import errors:', response.data.errors);
@@ -312,6 +359,15 @@ export default function UserManagement() {
             onChange={handleFileUpload}
             className="hidden"
           />
+          {selectedUsers.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="btn btn-danger flex items-center gap-2"
+            >
+              <Trash2 className="w-5 h-5" />
+              Xóa ({selectedUsers.size})
+            </button>
+          )}
           <button
             onClick={() => {
               resetForm();
@@ -365,6 +421,14 @@ export default function UserManagement() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
+                <th className="text-center py-3 px-4 w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                </th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Họ tên</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Phòng ban</th>
@@ -375,6 +439,14 @@ export default function UserManagement() {
             <tbody>
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="text-center py-3 px-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.has(user.id)}
+                      onChange={() => toggleSelectUser(user.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                  </td>
                   <td className="py-3 px-4">
                     <p className="font-medium text-gray-900">{user.fullName}</p>
                   </td>

@@ -500,6 +500,78 @@ app.post('/api/users/bulk', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => 
   });
 });
 
+// Bulk upsert (update or insert) users
+app.post('/api/users/bulk-upsert', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  const { users: importUsers } = req.body;
+  
+  if (!importUsers || !Array.isArray(importUsers) || importUsers.length === 0) {
+    return res.status(400).json({ message: 'Không có dữ liệu để import' });
+  }
+
+  const errors: any[] = [];
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  importUsers.forEach((userData, index) => {
+    try {
+      // Validate required fields
+      if (!userData.email || !userData.fullName) {
+        errors.push({ 
+          row: index + 1, 
+          email: userData.email,
+          error: 'Thiếu thông tin bắt buộc (email, họ tên)' 
+        });
+        return;
+      }
+
+      // Check if email already exists
+      const existingUserIndex = users.findIndex(u => u.email === userData.email);
+      
+      if (existingUserIndex >= 0) {
+        // Update existing user
+        const existingUser = users[existingUserIndex];
+        users[existingUserIndex] = {
+          ...existingUser,
+          fullName: userData.fullName,
+          role: userData.role || existingUser.role,
+          departmentId: userData.departmentId !== undefined ? userData.departmentId : existingUser.departmentId,
+          // Only update password if provided
+          ...(userData.password && { password: userData.password }),
+        };
+        updatedCount++;
+      } else {
+        // Create new user
+        const newUser = {
+          id: Date.now().toString() + '-' + index,
+          email: userData.email,
+          fullName: userData.fullName,
+          password: userData.password || '123456', // Default password
+          role: userData.role || 'EMPLOYEE',
+          departmentId: userData.departmentId || null,
+          createdAt: new Date().toISOString(),
+        };
+        users.push(newUser);
+        createdCount++;
+      }
+    } catch (error) {
+      errors.push({ 
+        row: index + 1, 
+        email: userData.email,
+        error: 'Lỗi không xác định' 
+      });
+    }
+  });
+
+  res.json({
+    message: `Import thành công: ${createdCount} mới, ${updatedCount} cập nhật`,
+    successCount: createdCount + updatedCount,
+    createdCount,
+    updatedCount,
+    totalCount: importUsers.length,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+});
+
 // Leave request endpoints
 app.get('/api/leave-requests/my-requests', (req, res) => {
   res.json({
