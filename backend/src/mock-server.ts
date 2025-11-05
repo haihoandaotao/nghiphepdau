@@ -366,7 +366,7 @@ app.put('/api/users/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
     const demoUser = Object.values(demoAccounts).find((u: any) => u.id === id);
     if (demoUser) {
       // Add demo user to users array first
-      users.push({ ...demoUser });
+      users.push(Object.assign({}, demoUser));
       index = users.length - 1;
     }
   }

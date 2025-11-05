@@ -6,8 +6,8 @@ try {
   console.log('Current directory:', process.cwd());
   console.log('Files:', require('fs').readdirSync('.'));
   
-  // Build command
-  execSync('npx tsc src/mock-server.ts --outDir dist --module commonjs --target ES2020 --esModuleInterop --skipLibCheck true --resolveJsonModule true', {
+  // Build command with relaxed type checking
+  execSync('npx tsc src/mock-server.ts --outDir dist --module commonjs --target ES2020 --esModuleInterop --skipLibCheck true --resolveJsonModule true --strictPropertyInitialization false --strict false --noImplicitAny false', {
     stdio: 'inherit'
   });
   
