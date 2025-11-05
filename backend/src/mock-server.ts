@@ -40,7 +40,16 @@ const upload = multer({
   }
 });
 
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'], credentials: true }));
+app.use(cors({ 
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://localhost:3002',
+    'https://nghiphepdau.onrender.com',
+    /\.onrender\.com$/  // Allow all Render domains
+  ], 
+  credentials: true 
+}));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir)); // Serve uploaded files
 
