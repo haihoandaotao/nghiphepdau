@@ -135,9 +135,9 @@ const demoAccounts: any = {
 
 let leaveRequests: any[] = [];
 let departments: any[] = [
-  { id: '1', name: 'Phòng IT', code: 'IT', managerId: null, _count: { employees: 5 } },
-  { id: '2', name: 'Phòng Kinh doanh', code: 'SALES', managerId: null, _count: { employees: 8 } },
-  { id: '3', name: 'Phòng Nhân sự', code: 'HR', managerId: null, _count: { employees: 3 } },
+  { id: '1', name: 'Phòng IT', code: 'IT', managerId: null },
+  { id: '2', name: 'Phòng Kinh doanh', code: 'SALES', managerId: null },
+  { id: '3', name: 'Phòng Nhân sự', code: 'HR', managerId: null },
 ];
 let leaveTypes: any[] = [
   { id: '1', code: 'ANNUAL', name: 'Phép năm', description: 'Phép nghỉ hàng năm', defaultDays: 12, requiresApproval: true, maxConsecutiveDays: 30, isActive: true },
@@ -638,16 +638,20 @@ app.delete('/api/leave-types/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, r
 
 // Departments (HR/Admin can modify, all can view)
 app.get('/api/departments', (req, res) => {
-  // Populate manager info
+  // Populate manager info and count employees
   const deptWithManagers = departments.map(dept => {
     const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
+    // Count actual employees in this department
+    const employeeCount = users.filter((u: any) => u.departmentId === dept.id).length;
+    
     return {
       ...dept,
       manager: manager ? {
         id: manager.id,
         fullName: manager.fullName,
         email: manager.email
-      } : null
+      } : null,
+      _count: { employees: employeeCount }
     };
   });
   res.json({ departments: deptWithManagers });
@@ -657,20 +661,22 @@ app.post('/api/departments', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) =>
   const newDept = {
     id: Date.now().toString(),
     ...req.body,
-    _count: { employees: 0 },
     createdAt: new Date().toISOString(),
   };
   departments.push(newDept);
   
-  // Populate manager info
+  // Populate manager info and count employees
   const manager = newDept.managerId ? users.find((u: any) => u.id === newDept.managerId) : null;
+  const employeeCount = users.filter((u: any) => u.departmentId === newDept.id).length;
+  
   const deptWithManager = {
     ...newDept,
     manager: manager ? {
       id: manager.id,
       fullName: manager.fullName,
       email: manager.email
-    } : null
+    } : null,
+    _count: { employees: employeeCount }
   };
   
   res.status(201).json({ message: 'Department created', department: deptWithManager });
@@ -682,16 +688,19 @@ app.put('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res)
   if (index >= 0) {
     departments[index] = { ...departments[index], ...req.body };
     
-    // Populate manager info
+    // Populate manager info and count employees
     const dept = departments[index];
     const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
+    const employeeCount = users.filter((u: any) => u.departmentId === dept.id).length;
+    
     const deptWithManager = {
       ...dept,
       manager: manager ? {
         id: manager.id,
         fullName: manager.fullName,
         email: manager.email
-      } : null
+      } : null,
+      _count: { employees: employeeCount }
     };
     
     res.json({ message: 'Department updated', department: deptWithManager });
