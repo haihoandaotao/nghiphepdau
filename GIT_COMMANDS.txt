@@ -1,0 +1,8 @@
+# Lệnh push lên GitHub
+
+# Thay YOUR_USERNAME bằng username GitHub thực của bạn
+# Ví dụ: https://github.com/nguyenvana/nghiphep.git
+
+git remote add origin https://github.com/YOUR_USERNAME/nghiphep.git
+git branch -M main
+git push -u origin main
