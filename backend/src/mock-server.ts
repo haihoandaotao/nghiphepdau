@@ -638,7 +638,19 @@ app.delete('/api/leave-types/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, r
 
 // Departments (HR/Admin can modify, all can view)
 app.get('/api/departments', (req, res) => {
-  res.json({ departments });
+  // Populate manager info
+  const deptWithManagers = departments.map(dept => {
+    const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
+    return {
+      ...dept,
+      manager: manager ? {
+        id: manager.id,
+        fullName: manager.fullName,
+        email: manager.email
+      } : null
+    };
+  });
+  res.json({ departments: deptWithManagers });
 });
 
 app.post('/api/departments', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
@@ -649,7 +661,19 @@ app.post('/api/departments', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) =>
     createdAt: new Date().toISOString(),
   };
   departments.push(newDept);
-  res.status(201).json({ message: 'Department created', department: newDept });
+  
+  // Populate manager info
+  const manager = newDept.managerId ? users.find((u: any) => u.id === newDept.managerId) : null;
+  const deptWithManager = {
+    ...newDept,
+    manager: manager ? {
+      id: manager.id,
+      fullName: manager.fullName,
+      email: manager.email
+    } : null
+  };
+  
+  res.status(201).json({ message: 'Department created', department: deptWithManager });
 });
 
 app.put('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
@@ -657,7 +681,20 @@ app.put('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res)
   const index = departments.findIndex(d => d.id === id);
   if (index >= 0) {
     departments[index] = { ...departments[index], ...req.body };
-    res.json({ message: 'Department updated', department: departments[index] });
+    
+    // Populate manager info
+    const dept = departments[index];
+    const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
+    const deptWithManager = {
+      ...dept,
+      manager: manager ? {
+        id: manager.id,
+        fullName: manager.fullName,
+        email: manager.email
+      } : null
+    };
+    
+    res.json({ message: 'Department updated', department: deptWithManager });
   } else {
     res.status(404).json({ message: 'Department not found' });
   }
