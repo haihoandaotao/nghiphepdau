@@ -212,46 +212,6 @@ export default function AttendanceScanner() {
 
         {!scanning ? (
           <div className="space-y-4">
-            {/* Manual Token Input - Alternative Method */}
-            <div className="bg-white border-2 border-primary-200 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-3">🔑 Nhập mã token (Thay thế quét QR)</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Nếu camera không hoạt động, hãy nhập mã token từ màn hình QR code tại công ty
-              </p>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const token = (e.currentTarget.elements.namedItem('token') as HTMLInputElement).value.trim();
-                if (token) {
-                  await handleScan(token);
-                  (e.currentTarget.elements.namedItem('token') as HTMLInputElement).value = '';
-                }
-              }} className="flex gap-2">
-                <input
-                  type="text"
-                  name="token"
-                  placeholder="Nhập mã token (dưới QR code)"
-                  disabled={todayStatus?.hasCheckedOut}
-                  className="input flex-1"
-                />
-                <button
-                  type="submit"
-                  disabled={todayStatus?.hasCheckedOut}
-                  className="btn btn-primary whitespace-nowrap"
-                >
-                  Xác nhận
-                </button>
-              </form>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">HOẶC</span>
-              </div>
-            </div>
-
             <div className="bg-gray-50 rounded-lg p-8 text-center">
               <Camera className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-4">
