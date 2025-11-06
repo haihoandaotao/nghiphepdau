@@ -68,7 +68,23 @@ export default function AttendanceScanner() {
       setScanning(true);
     } catch (error: any) {
       console.error('Error starting scanner:', error);
-      toast.error('Không thể khởi động camera. Vui lòng cho phép truy cập camera.');
+      let errorMessage = 'Không thể khởi động camera. ';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Bạn đã từ chối quyền truy cập camera. Vui lòng bật lại trong cài đặt trình duyệt.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'Không tìm thấy camera trên thiết bị.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Camera đang được sử dụng bởi ứng dụng khác.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage += 'Không tìm thấy camera phù hợp.';
+      } else if (error.name === 'NotSupportedError' || error.name === 'TypeError') {
+        errorMessage += 'Trình duyệt không hỗ trợ hoặc yêu cầu HTTPS.';
+      } else {
+        errorMessage += error.message || 'Lỗi không xác định.';
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -211,10 +227,18 @@ export default function AttendanceScanner() {
               )}
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
               <p className="text-sm text-blue-800">
-                <strong>Hướng dẫn:</strong> Đưa camera vào khung QR code được hiển thị ở cổng văn phòng.
-                Mã QR sẽ tự động thay đổi mỗi 5 phút để đảm bảo an toàn.
+                <strong>Hướng dẫn:</strong>
+              </p>
+              <ol className="list-decimal list-inside text-sm text-blue-800 space-y-1">
+                <li>Nhấn nút "Bật Camera" và cho phép truy cập camera khi trình duyệt hỏi</li>
+                <li>Đưa camera vào khung QR code được hiển thị tại công ty</li>
+                <li>Mã QR sẽ tự động thay đổi mỗi 5 phút để đảm bảo an toàn</li>
+              </ol>
+              <p className="text-xs text-blue-700 mt-2">
+                💡 <strong>Lưu ý:</strong> Trình duyệt cần quyền truy cập camera. 
+                Nếu bị từ chối, hãy vào Cài đặt → Quyền riêng tư → Camera để bật lại.
               </p>
             </div>
           </div>
