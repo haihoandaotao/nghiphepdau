@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, X, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Camera, X, CheckCircle, Clock, AlertCircle, User, Building2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { useAuthStore } from '@/store/authStore';
 
 interface TodayStatus {
   date: string;
@@ -19,6 +20,7 @@ interface TodayStatus {
 }
 
 export default function AttendanceScanner() {
+  const { user } = useAuthStore();
   const [scanning, setScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(null);
@@ -159,6 +161,32 @@ export default function AttendanceScanner() {
           {format(new Date(), "EEEE, dd MMMM yyyy", { locale: vi })}
         </p>
       </div>
+
+      {/* User Info Card */}
+      {user && (
+        <div className="card bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-200">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-lg">
+              {user.fullName?.charAt(0) || 'U'}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <User className="w-4 h-4 text-gray-600" />
+                <p className="font-semibold text-gray-900">{user.fullName || 'N/A'}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-gray-500" />
+                <p className="text-sm text-gray-600">{user.department?.name || 'Chưa có phòng ban'}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-700">
+                {user.role}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Today's Status */}
       <div className="card">

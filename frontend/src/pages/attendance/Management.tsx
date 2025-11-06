@@ -39,6 +39,7 @@ export default function AttendanceManagement() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
 
   useEffect(() => {
     fetchRecords();
@@ -75,8 +76,12 @@ export default function AttendanceManagement() {
       record.user?.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.user?.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || record.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesDepartment = departmentFilter === 'ALL' || record.user?.department?.name === departmentFilter;
+    return matchesSearch && matchesStatus && matchesDepartment;
   });
+
+  // Get unique departments for filter
+  const departments = Array.from(new Set(records.map(r => r.user?.department?.name).filter(Boolean)));
 
   const deleteAllRecords = async () => {
     if (!window.confirm('⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu điểm danh? Hành động này không thể hoàn tác!')) {
@@ -240,6 +245,20 @@ export default function AttendanceManagement() {
               <option value="LATE">Đi muộn</option>
               <option value="HALF_DAY">Nửa ngày</option>
               <option value="ABSENT">Vắng mặt</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="input w-auto"
+            >
+              <option value="ALL">Tất cả phòng ban</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
             </select>
           </div>
 
