@@ -15,6 +15,10 @@ import LeaveTypeManagement from './pages/admin/LeaveTypeManagement';
 import HolidayManagement from './pages/admin/HolidayManagement';
 import Reports from './pages/reports/Reports';
 import Profile from './pages/Profile';
+import AttendanceScanner from './pages/attendance/Scanner';
+import AttendanceQR from './pages/attendance/QRDisplay';
+import AttendanceHistory from './pages/attendance/History';
+import AttendanceManagement from './pages/attendance/Management';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -91,6 +95,28 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['HR', 'ADMIN']}>
                 <HolidayManagement />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="attendance" 
+            element={
+              <ProtectedRoute allowedRoles={['HR', 'ADMIN']}>
+                <AttendanceManagement />
+              </ProtectedRoute>
+            } 
+          />
+        </Route>
+
+        {/* Attendance routes */}
+        <Route path="attendance">
+          <Route path="scan" element={<AttendanceScanner />} />
+          <Route path="history" element={<AttendanceHistory />} />
+          <Route 
+            path="qr" 
+            element={
+              <ProtectedRoute allowedRoles={['HR', 'ADMIN']}>
+                <AttendanceQR />
               </ProtectedRoute>
             } 
           />

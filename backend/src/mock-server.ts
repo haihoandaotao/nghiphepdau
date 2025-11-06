@@ -4,6 +4,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import QRCode from 'qrcode';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -280,6 +282,78 @@ let holidays: any[] = [
   { id: '4', name: 'Quốc tế Lao động', date: '2025-05-01', description: '1/5', createdAt: new Date().toISOString() },
   { id: '5', name: 'Quốc khánh', date: '2025-09-02', description: '2/9', createdAt: new Date().toISOString() },
 ];
+
+// Attendance records
+let attendanceRecords: any[] = [];
+
+// Attendance settings
+const attendanceSettings = {
+  workStartTime: '08:00',
+  workEndTime: '17:00',
+  lateThreshold: 15, // minutes
+  enableLocation: false,
+};
+
+// Attendance Token Generation (5-minute window)
+const generateAttendanceToken = () => {
+  const now = Date.now();
+  const interval = 5 * 60 * 1000; // 5 minutes
+  const timestamp = Math.floor(now / interval);
+  const secret = process.env.ATTENDANCE_SECRET || 'dau-attendance-secret-2025';
+  
+  const token = crypto
+    .createHmac('sha256', secret)
+    .update(`attendance:${timestamp}`)
+    .digest('hex')
+    .substring(0, 32);
+  
+  const expiresAt = (timestamp + 1) * interval;
+  const timeLeft = Math.floor((expiresAt - now) / 1000);
+  
+  return { token, expiresAt, timeLeft };
+};
+
+// Validate Attendance Token
+const validateAttendanceToken = (inputToken: string): boolean => {
+  const secret = process.env.ATTENDANCE_SECRET || 'dau-attendance-secret-2025';
+  
+  // Check current token
+  const currentToken = generateAttendanceToken();
+  if (inputToken === currentToken.token) return true;
+  
+  // Check previous token (buffer for clock skew)
+  const prevTimestamp = Math.floor(Date.now() / (5 * 60 * 1000)) - 1;
+  const prevToken = crypto
+    .createHmac('sha256', secret)
+    .update(`attendance:${prevTimestamp}`)
+    .digest('hex')
+    .substring(0, 32);
+  
+  return inputToken === prevToken;
+};
+
+// Calculate work status
+const calculateWorkStatus = (checkInTime: Date, checkOutTime: Date | null) => {
+  const checkInDate = new Date(checkInTime);
+  const [startHour, startMinute] = attendanceSettings.workStartTime.split(':').map(Number);
+  const workStart = new Date(checkInDate);
+  workStart.setHours(startHour, startMinute, 0, 0);
+  
+  const minutesLate = Math.floor((checkInDate.getTime() - workStart.getTime()) / (1000 * 60));
+  
+  if (minutesLate > attendanceSettings.lateThreshold) {
+    return 'LATE';
+  }
+  
+  if (checkOutTime) {
+    const workHours = (new Date(checkOutTime).getTime() - checkInDate.getTime()) / (1000 * 60 * 60);
+    if (workHours < 4) {
+      return 'HALF_DAY';
+    }
+  }
+  
+  return 'PRESENT';
+};
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1021,6 +1095,264 @@ app.get('/api/notifications', (req, res) => {
     unreadCount: 0,
     pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
   });
+});
+
+// ==================== ATTENDANCE APIs ====================
+
+// Get current QR token (for display on screen/print)
+app.get('/api/attendance/qr-token', mockAuth, checkRole(['HR', 'ADMIN']), async (req, res) => {
+  try {
+    const { token, expiresAt, timeLeft } = generateAttendanceToken();
+    
+    // Generate QR code image (base64)
+    const qrCodeDataUrl = await QRCode.toDataURL(token, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    });
+    
+    res.json({
+      token,
+      qrCodeDataUrl,
+      expiresAt,
+      timeLeft,
+      refreshInterval: 5 * 60, // 5 minutes in seconds
+    });
+  } catch (error) {
+    console.error('Error generating QR code:', error);
+    res.status(500).json({ message: 'Failed to generate QR code' });
+  }
+});
+
+// Check-in
+app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
+  try {
+    const { token, location } = req.body;
+    const userId = req.user.id;
+    
+    // Validate token
+    if (!validateAttendanceToken(token)) {
+      return res.status(400).json({ message: 'QR code không hợp lệ hoặc đã hết hạn' });
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Check if already checked in today
+    const existingRecord = attendanceRecords.find(
+      (r: any) => r.userId === userId && r.date === today
+    );
+    
+    if (existingRecord && existingRecord.checkInTime) {
+      return res.status(400).json({ 
+        message: 'Bạn đã check-in hôm nay rồi',
+        checkInTime: existingRecord.checkInTime,
+      });
+    }
+    
+    const checkInTime = new Date();
+    
+    if (existingRecord) {
+      // Update existing record
+      existingRecord.checkInTime = checkInTime.toISOString();
+      existingRecord.checkInLocation = location;
+      existingRecord.status = calculateWorkStatus(checkInTime, null);
+    } else {
+      // Create new record
+      const newRecord = {
+        id: Date.now().toString(),
+        userId,
+        date: today,
+        checkInTime: checkInTime.toISOString(),
+        checkInLocation: location,
+        checkOutTime: null,
+        checkOutLocation: null,
+        status: calculateWorkStatus(checkInTime, null),
+        workingHours: null,
+        notes: null,
+        createdAt: new Date().toISOString(),
+      };
+      attendanceRecords.push(newRecord);
+    }
+    
+    res.json({
+      message: 'Check-in thành công',
+      checkInTime: checkInTime.toISOString(),
+      status: calculateWorkStatus(checkInTime, null),
+    });
+  } catch (error: any) {
+    console.error('Check-in error:', error);
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
+// Check-out
+app.post('/api/attendance/check-out', mockAuth, async (req: any, res) => {
+  try {
+    const { token, location } = req.body;
+    const userId = req.user.id;
+    
+    // Validate token
+    if (!validateAttendanceToken(token)) {
+      return res.status(400).json({ message: 'QR code không hợp lệ hoặc đã hết hạn' });
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Find today's record
+    const record = attendanceRecords.find(
+      (r: any) => r.userId === userId && r.date === today
+    );
+    
+    if (!record || !record.checkInTime) {
+      return res.status(400).json({ message: 'Bạn chưa check-in hôm nay' });
+    }
+    
+    if (record.checkOutTime) {
+      return res.status(400).json({ 
+        message: 'Bạn đã check-out hôm nay rồi',
+        checkOutTime: record.checkOutTime,
+      });
+    }
+    
+    const checkOutTime = new Date();
+    const checkInTime = new Date(record.checkInTime);
+    const workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+    
+    record.checkOutTime = checkOutTime.toISOString();
+    record.checkOutLocation = location;
+    record.workingHours = Math.round(workingHours * 100) / 100;
+    record.status = calculateWorkStatus(checkInTime, checkOutTime);
+    
+    res.json({
+      message: 'Check-out thành công',
+      checkOutTime: checkOutTime.toISOString(),
+      workingHours: record.workingHours,
+      status: record.status,
+    });
+  } catch (error: any) {
+    console.error('Check-out error:', error);
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
+// Get today's attendance status
+app.get('/api/attendance/today', mockAuth, (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+    
+    const record = attendanceRecords.find(
+      (r: any) => r.userId === userId && r.date === today
+    );
+    
+    res.json({
+      date: today,
+      record: record || null,
+      hasCheckedIn: !!record?.checkInTime,
+      hasCheckedOut: !!record?.checkOutTime,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
+// Get attendance history
+app.get('/api/attendance/history', mockAuth, (req: any, res) => {
+  try {
+    const userId = req.user.id;
+    const { month, year } = req.query;
+    
+    let records = attendanceRecords.filter((r: any) => r.userId === userId);
+    
+    if (month && year) {
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+      records = records.filter((r: any) => r.date.startsWith(monthStr));
+    }
+    
+    // Sort by date descending
+    records.sort((a: any, b: any) => b.date.localeCompare(a.date));
+    
+    res.json({
+      records,
+      total: records.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
+// Get all attendance records (HR/Admin only)
+app.get('/api/attendance/all', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  try {
+    const { date, userId, status } = req.query;
+    
+    let records = [...attendanceRecords];
+    
+    if (date) {
+      records = records.filter((r: any) => r.date === date);
+    }
+    
+    if (userId) {
+      records = records.filter((r: any) => r.userId === userId);
+    }
+    
+    if (status) {
+      records = records.filter((r: any) => r.status === status);
+    }
+    
+    // Populate user info
+    const recordsWithUser = records.map((r: any) => {
+      const user = users.find((u: any) => u.id === r.userId);
+      return {
+        ...r,
+        user: user ? {
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          department: user.departmentId ? departments.find((d: any) => d.id === user.departmentId) : null,
+        } : null,
+      };
+    });
+    
+    // Sort by date and checkInTime descending
+    recordsWithUser.sort((a: any, b: any) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.checkInTime || '').localeCompare(a.checkInTime || '');
+    });
+    
+    res.json({
+      records: recordsWithUser,
+      total: recordsWithUser.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
+// Get attendance statistics (HR/Admin only)
+app.get('/api/attendance/stats', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    
+    const monthRecords = attendanceRecords.filter((r: any) => r.date.startsWith(monthStr));
+    
+    const stats = {
+      totalDays: monthRecords.length,
+      present: monthRecords.filter((r: any) => r.status === 'PRESENT').length,
+      late: monthRecords.filter((r: any) => r.status === 'LATE').length,
+      absent: monthRecords.filter((r: any) => r.status === 'ABSENT').length,
+      halfDay: monthRecords.filter((r: any) => r.status === 'HALF_DAY').length,
+    };
+    
+    res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
 });
 
 // 404 handler

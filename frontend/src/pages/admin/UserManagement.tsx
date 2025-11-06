@@ -305,7 +305,6 @@ export default function UserManagement() {
     try {
       const response = await api.post('/users/bulk-upsert', { users: importData });
       
-      const successCount = response.data.successCount || 0;
       const updatedCount = response.data.updatedCount || 0;
       const createdCount = response.data.createdCount || 0;
       

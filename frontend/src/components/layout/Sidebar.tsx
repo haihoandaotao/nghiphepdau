@@ -9,7 +9,9 @@ import {
   Calendar, 
   Settings,
   BarChart3,
-  X
+  X,
+  QrCode,
+  ClipboardList
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,8 +28,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
     { path: '/leave-requests', label: 'Đơn nghỉ phép', icon: FileText, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
+    { path: '/attendance/scan', label: 'Điểm danh', icon: QrCode, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
+    { path: '/attendance/history', label: 'Lịch sử điểm danh', icon: ClipboardList, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
     { path: '/approvals', label: 'Phê duyệt', icon: CheckSquare, roles: ['MANAGER', 'HR', 'ADMIN'] },
     { path: '/reports', label: 'Báo cáo', icon: BarChart3, roles: ['MANAGER', 'HR', 'ADMIN'] },
+    { path: '/attendance/qr', label: 'Mã QR điểm danh', icon: QrCode, roles: ['HR', 'ADMIN'] },
+    { path: '/admin/attendance', label: 'Quản lý chuyên cần', icon: ClipboardList, roles: ['HR', 'ADMIN'] },
     { path: '/admin/users', label: 'Quản lý nhân viên', icon: Users, roles: ['HR', 'ADMIN'] },
     { path: '/admin/departments', label: 'Phòng ban', icon: Building2, roles: ['HR', 'ADMIN'] },
     { path: '/admin/leave-types', label: 'Loại phép', icon: Settings, roles: ['HR', 'ADMIN'] },
