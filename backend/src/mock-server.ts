@@ -1355,6 +1355,20 @@ app.get('/api/attendance/stats', mockAuth, checkRole(['HR', 'ADMIN']), (req, res
   }
 });
 
+// Delete all attendance records (Admin only - for testing)
+app.delete('/api/attendance/all', mockAuth, checkRole(['ADMIN']), (req, res) => {
+  try {
+    const count = attendanceRecords.length;
+    attendanceRecords = [];
+    res.json({ 
+      message: `Đã xóa ${count} bản ghi điểm danh`,
+      deletedCount: count 
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });

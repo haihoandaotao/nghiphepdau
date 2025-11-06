@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Download, Users, TrendingUp, Filter, Search } from 'lucide-react';
+import { Calendar, Download, Users, TrendingUp, Filter, Search, Trash2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
+import { toast } from 'react-toastify';
 
 interface AttendanceRecord {
   id: string;
@@ -76,6 +77,21 @@ export default function AttendanceManagement() {
     const matchesStatus = statusFilter === 'ALL' || record.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const deleteAllRecords = async () => {
+    if (!window.confirm('⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu điểm danh? Hành động này không thể hoàn tác!')) {
+      return;
+    }
+    
+    try {
+      const response = await api.delete('/attendance/all');
+      toast.success(response.data.message || 'Đã xóa tất cả dữ liệu');
+      fetchRecords();
+      fetchStats();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Không thể xóa dữ liệu');
+    }
+  };
 
   const exportToExcel = () => {
     const data = filteredRecords.map((record) => ({
@@ -230,6 +246,15 @@ export default function AttendanceManagement() {
           <button onClick={exportToExcel} className="btn btn-secondary flex items-center gap-2">
             <Download className="w-4 h-4" />
             Xuất Excel
+          </button>
+
+          <button 
+            onClick={deleteAllRecords} 
+            className="btn bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
+            title="Xóa tất cả dữ liệu điểm danh (chỉ dùng để test)"
+          >
+            <Trash2 className="w-4 h-4" />
+            Xóa tất cả
           </button>
         </div>
       </div>
