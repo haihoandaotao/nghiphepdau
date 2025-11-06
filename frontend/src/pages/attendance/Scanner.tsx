@@ -23,6 +23,7 @@ export default function AttendanceScanner() {
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false); // Flag to prevent duplicate scans
 
   useEffect(() => {
     fetchTodayStatus();
@@ -103,6 +104,14 @@ export default function AttendanceScanner() {
   };
 
   const handleScan = async (token: string) => {
+    // Prevent duplicate processing
+    if (processing) {
+      console.log('Already processing, ignoring duplicate scan');
+      return;
+    }
+
+    setProcessing(true);
+    
     try {
       const isCheckIn = !todayStatus?.hasCheckedIn;
       const endpoint = isCheckIn ? '/attendance/check-in' : '/attendance/check-out';
@@ -110,9 +119,12 @@ export default function AttendanceScanner() {
       const response = await api.post(endpoint, { token });
       
       toast.success(response.data.message);
-      fetchTodayStatus(); // Refresh status
+      await fetchTodayStatus(); // Refresh status
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      // Reset processing flag after a delay to allow status update
+      setTimeout(() => setProcessing(false), 2000);
     }
   };
 
