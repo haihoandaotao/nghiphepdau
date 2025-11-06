@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Camera</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background: #DC2626;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #B91C1C;
+        }
+        #error {
+            color: red;
+            margin-top: 20px;
+        }
+        #info {
+            color: green;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 Test Camera</h1>
+    <p>Nhấn nút bên dưới để test camera của bạn</p>
+    
+    <button onclick="startCamera()">Bật Camera</button>
+    <button onclick="stopCamera()">Tắt Camera</button>
+    
+    <div id="info"></div>
+    <div id="error"></div>
+    
+    <video id="video" autoplay playsinline></video>
+
+    <script>
+        let stream = null;
+        const video = document.getElementById('video');
+        const errorDiv = document.getElementById('error');
+        const infoDiv = document.getElementById('info');
+
+        async function startCamera() {
+            errorDiv.textContent = '';
+            infoDiv.textContent = 'Đang yêu cầu quyền truy cập camera...';
+            
+            try {
+                // Try to get camera access
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment' // Prefer back camera on mobile
+                    } 
+                });
+                
+                video.srcObject = stream;
+                infoDiv.textContent = '✅ Camera hoạt động tốt!';
+                errorDiv.textContent = '';
+                
+                console.log('Camera started successfully');
+                console.log('Stream:', stream);
+                console.log('Video tracks:', stream.getVideoTracks());
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                errorDiv.textContent = `❌ Lỗi: ${error.name} - ${error.message}`;
+                infoDiv.textContent = '';
+                
+                // Detailed error messages
+                if (error.name === 'NotAllowedError') {
+                    errorDiv.textContent += '\n\n👉 Bạn đã từ chối quyền camera. Hãy click vào icon 🔒 hoặc 🎥 bên trái thanh địa chỉ và cho phép camera.';
+                } else if (error.name === 'NotFoundError') {
+                    errorDiv.textContent += '\n\n👉 Không tìm thấy camera. Kiểm tra xem máy tính có camera không.';
+                } else if (error.name === 'NotReadableError') {
+                    errorDiv.textContent += '\n\n👉 Camera đang được sử dụng bởi ứng dụng khác. Hãy đóng Zoom, Skype, Teams, v.v...';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorDiv.textContent += '\n\n👉 Không tìm thấy camera phù hợp với yêu cầu.';
+                }
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                infoDiv.textContent = 'Camera đã tắt';
+                errorDiv.textContent = '';
+            }
+        }
+
+        // Check if getUserMedia is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            errorDiv.textContent = '❌ Trình duyệt không hỗ trợ camera API';
+        }
+    </script>
+</body>
+</html>

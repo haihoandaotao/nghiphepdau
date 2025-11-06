@@ -45,6 +45,12 @@ export default function AttendanceScanner() {
   };
 
   const startScanning = async () => {
+    // Set scanning to true first so the div renders
+    setScanning(true);
+    
+    // Wait a bit for the DOM to update
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       const html5QrCode = new Html5Qrcode("qr-reader");
       setScanner(html5QrCode);
@@ -64,10 +70,10 @@ export default function AttendanceScanner() {
           // Ignore scan errors (happens continuously)
         }
       );
-
-      setScanning(true);
     } catch (error: any) {
       console.error('Error starting scanner:', error);
+      setScanning(false); // Reset scanning state on error
+      
       let errorMessage = 'Không thể khởi động camera. ';
       
       if (error.name === 'NotAllowedError') {
