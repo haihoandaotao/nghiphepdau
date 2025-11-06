@@ -17,6 +17,14 @@ export default function AttendanceQR() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Debug: Check auth
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    console.log('Auth Debug - Token:', token ? 'exists' : 'missing');
+    console.log('Auth Debug - User:', userStr);
+  }, []);
+
   useEffect(() => {
     fetchQRToken();
     const interval = setInterval(fetchQRToken, 5 * 60 * 1000); // Refresh every 5 minutes
@@ -41,12 +49,17 @@ export default function AttendanceQR() {
 
   const fetchQRToken = async () => {
     try {
+      console.log('Fetching QR token...');
       const response = await api.get('/attendance/qr-token');
+      console.log('QR token response:', response.data);
       setQrData(response.data);
       setLoading(false);
     } catch (error: any) {
       console.error('Error fetching QR token:', error);
-      toast.error('Không thể tải mã QR');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      const errorMsg = error.response?.data?.message || 'Không thể tải mã QR';
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
@@ -80,12 +93,32 @@ export default function AttendanceQR() {
     );
   }
 
+  // Debug info
+  const token = localStorage.getItem('token');
+  const userStr = localStorage.getItem('user');
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    console.error('Failed to parse user:', e);
+  }
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
+      {/* Debug info - Remove after testing */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="card bg-yellow-50 border border-yellow-200">
+          <h3 className="font-semibold text-yellow-900 mb-2">Debug Info:</h3>
+          <p className="text-sm">Token: {token ? '✅ Exists' : '❌ Missing'}</p>
+          <p className="text-sm">User: {user ? user.email : '❌ Not found'}</p>
+          <p className="text-sm">Role: {user ? user.role : '❌ N/A'}</p>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-gray-900">🔲 Mã QR Điểm danh</h1>
         <p className="text-gray-600 mt-1">
-          Hiển thị hoặc in mã QR này tại cổng văn phòng để nhân viên quét điểm danh
+          Hiển thị hoặc in mã QR này tại công văn phòng để nhân viên quét điểm danh
         </p>
       </div>
 

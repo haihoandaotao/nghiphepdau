@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test QR API</title>
+</head>
+<body>
+    <h1>Test Attendance QR API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            
+            // Get token from localStorage (assuming you're logged in)
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                resultDiv.innerHTML = '<p style="color: red;">No token found. Please login first at <a href="http://localhost:3000">http://localhost:3000</a></p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/attendance/qr-token', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <h2 style="color: green;">Success!</h2>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <img src="${data.qrCodeDataUrl}" alt="QR Code" />
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h2 style="color: red;">Error ${response.status}</h2>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h2 style="color: red;">Network Error</h2>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
