@@ -141,6 +141,14 @@ export default function AttendanceQR() {
                   />
                 </div>
 
+                {/* Display Token as Text */}
+                <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 mb-1">Mã token (để nhập thủ công):</p>
+                  <p className="font-mono text-sm text-gray-900 break-all select-all">
+                    {qrData.token}
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-center gap-2 text-gray-600">
                     <Clock className="w-5 h-5" />
