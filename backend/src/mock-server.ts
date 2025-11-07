@@ -1289,6 +1289,58 @@ app.get('/api/attendance/today', mockAuth, (req: any, res) => {
   }
 });
 
+// Get today's attendance statistics (for HR/Admin dashboard)
+app.get('/api/attendance/today-stats', mockAuth, checkRole(['HR', 'ADMIN']), (req: any, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecords = attendanceRecords.filter((r: any) => r.date === today);
+    
+    // Lấy tổng số nhân viên (demo accounts + dynamic users)
+    const allUsers = [...Object.values(demoAccounts), ...users.filter((u: any) => !u._deleted)];
+    const totalEmployees = allUsers.length;
+    
+    // Thống kê check-in
+    const checkedInOnTime = todayRecords.filter((r: any) => 
+      r.checkInTime && r.status === 'PRESENT'
+    ).length;
+    
+    const checkedInLate = todayRecords.filter((r: any) => 
+      r.checkInTime && (r.status === 'LATE' || r.status === 'HALF_DAY')
+    ).length;
+    
+    const notCheckedIn = totalEmployees - todayRecords.filter((r: any) => r.checkInTime).length;
+    
+    // Thống kê check-out (giả định check-out đúng giờ là sau 17:00)
+    const workEndHour = 17;
+    const checkedOutOnTime = todayRecords.filter((r: any) => {
+      if (!r.checkOutTime) return false;
+      const checkOutHour = new Date(r.checkOutTime).getHours();
+      return checkOutHour >= workEndHour;
+    }).length;
+    
+    const checkedOutLate = todayRecords.filter((r: any) => {
+      if (!r.checkOutTime) return false;
+      const checkOutHour = new Date(r.checkOutTime).getHours();
+      return checkOutHour < workEndHour;
+    }).length;
+    
+    const notCheckedOut = totalEmployees - todayRecords.filter((r: any) => r.checkOutTime).length;
+    
+    res.json({
+      totalEmployees,
+      checkedInOnTime,
+      checkedInLate,
+      notCheckedIn,
+      checkedOutOnTime,
+      checkedOutLate,
+      notCheckedOut,
+    });
+  } catch (error: any) {
+    console.error('Error getting today stats:', error);
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
 // Get attendance history
 app.get('/api/attendance/history', mockAuth, (req: any, res) => {
   try {

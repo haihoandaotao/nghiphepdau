@@ -26,11 +26,22 @@ interface TodayAttendance {
   hasCheckedOut: boolean;
 }
 
+interface TodayStats {
+  totalEmployees: number;
+  checkedInOnTime: number;
+  checkedInLate: number;
+  notCheckedIn: number;
+  checkedOutOnTime: number;
+  checkedOutLate: number;
+  notCheckedOut: number;
+}
+
 export default function Dashboard() {
   const { user } = useAuthStore();
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
   const [recentRequests, setRecentRequests] = useState<LeaveRequest[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
+  const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,15 +50,26 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const [balanceRes, requestsRes, attendanceRes] = await Promise.all([
+      const promises: Promise<any>[] = [
         api.get('/users/leave-balance'),
         api.get('/leave-requests/my-requests'),
         api.get('/attendance/today'),
-      ]);
+      ];
+
+      // Nếu là HR hoặc ADMIN, lấy thêm thống kê của tất cả nhân viên
+      if (user?.role === 'HR' || user?.role === 'ADMIN') {
+        promises.push(api.get('/attendance/today-stats'));
+      }
+
+      const results = await Promise.all(promises);
       
-      setLeaveBalance(balanceRes.data.leaveBalance || []);
-      setRecentRequests((requestsRes.data.leaveRequests || []).slice(0, 5));
-      setTodayAttendance(attendanceRes.data);
+      setLeaveBalance(results[0].data.leaveBalance || []);
+      setRecentRequests((results[1].data.leaveRequests || []).slice(0, 5));
+      setTodayAttendance(results[2].data);
+      
+      if (results[3]) {
+        setTodayStats(results[3].data);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -172,6 +194,86 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Today Stats for HR/Admin */}
+      {todayStats && (user?.role === 'HR' || user?.role === 'ADMIN') && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary-600" />
+            Thống kê chấm công hôm nay
+          </h2>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Check-in stats */}
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <p className="text-xs text-green-700 font-semibold mb-2">Check-in đúng giờ</p>
+              <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold text-green-600">{todayStats.checkedInOnTime}</p>
+                <p className="text-sm text-green-600 font-medium">
+                  {todayStats.totalEmployees > 0
+                    ? ((todayStats.checkedInOnTime / todayStats.totalEmployees) * 100).toFixed(1)
+                    : 0}%
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+              <p className="text-xs text-yellow-700 font-semibold mb-2">Check-in trễ</p>
+              <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold text-yellow-600">{todayStats.checkedInLate}</p>
+                <p className="text-sm text-yellow-600 font-medium">
+                  {todayStats.totalEmployees > 0
+                    ? ((todayStats.checkedInLate / todayStats.totalEmployees) * 100).toFixed(1)
+                    : 0}%
+                </p>
+              </div>
+            </div>
+
+            {/* Check-out stats */}
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p className="text-xs text-blue-700 font-semibold mb-2">Check-out đúng giờ</p>
+              <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold text-blue-600">{todayStats.checkedOutOnTime}</p>
+                <p className="text-sm text-blue-600 font-medium">
+                  {todayStats.totalEmployees > 0
+                    ? ((todayStats.checkedOutOnTime / todayStats.totalEmployees) * 100).toFixed(1)
+                    : 0}%
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <p className="text-xs text-orange-700 font-semibold mb-2">Check-out trễ</p>
+              <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold text-orange-600">{todayStats.checkedOutLate}</p>
+                <p className="text-sm text-orange-600 font-medium">
+                  {todayStats.totalEmployees > 0
+                    ? ((todayStats.checkedOutLate / todayStats.totalEmployees) * 100).toFixed(1)
+                    : 0}%
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary row */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Tổng nhân viên</p>
+                <p className="text-lg font-bold text-gray-900">{todayStats.totalEmployees}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Chưa check-in</p>
+                <p className="text-lg font-bold text-red-600">{todayStats.notCheckedIn}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Chưa check-out</p>
+                <p className="text-lg font-bold text-amber-600">{todayStats.notCheckedOut}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
