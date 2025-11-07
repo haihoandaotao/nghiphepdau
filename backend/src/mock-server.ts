@@ -1341,6 +1341,36 @@ app.get('/api/attendance/today-stats', mockAuth, checkRole(['HR', 'ADMIN']), (re
   }
 });
 
+// Get leave request statistics (HR/Admin only)
+app.get('/api/leave-requests/stats', mockAuth, checkRole(['HR', 'ADMIN']), (req: any, res) => {
+  try {
+    const totalRequests = leaveRequests.length;
+    const pendingRequests = leaveRequests.filter(r => r.status === 'PENDING').length;
+    const approvedRequests = leaveRequests.filter(r => r.status === 'APPROVED').length;
+    const rejectedRequests = leaveRequests.filter(r => r.status === 'REJECTED').length;
+    
+    // Group approved requests by leave type
+    const approvedByType = leaveTypes.map(type => {
+      const approved = leaveRequests.filter(r => r.status === 'APPROVED' && r.leaveTypeId === type.id);
+      return {
+        leaveType: type.name,
+        count: approved.length,
+        totalDays: approved.reduce((sum, r) => sum + (r.totalDays || 0), 0)
+      };
+    }).filter(item => item.count > 0);
+    
+    res.json({
+      totalRequests,
+      pendingRequests,
+      approvedRequests,
+      rejectedRequests,
+      approvedByType
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra' });
+  }
+});
+
 // Get attendance history
 app.get('/api/attendance/history', mockAuth, (req: any, res) => {
   try {

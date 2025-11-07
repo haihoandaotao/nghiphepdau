@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, XCircle, Plus, TrendingUp, QrCode, ClipboardCheck } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, TrendingUp, QrCode, ClipboardCheck } from 'lucide-react';
 import api from '@/lib/axios';
 import { LeaveRequest } from '@/types';
 import { useAuthStore } from '@/store/authStore';
@@ -36,12 +36,25 @@ interface TodayStats {
   notCheckedOut: number;
 }
 
+interface LeaveStats {
+  totalRequests: number;
+  pendingRequests: number;
+  approvedRequests: number;
+  rejectedRequests: number;
+  approvedByType: Array<{
+    leaveType: string;
+    count: number;
+    totalDays: number;
+  }>;
+}
+
 export default function Dashboard() {
   const { user } = useAuthStore();
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
   const [recentRequests, setRecentRequests] = useState<LeaveRequest[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
+  const [leaveStats, setLeaveStats] = useState<LeaveStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,9 +69,10 @@ export default function Dashboard() {
         api.get('/attendance/today'),
       ];
 
-      // Nếu là HR hoặc ADMIN, lấy thêm thống kê của tất cả nhân viên
+      // Nếu là HR hoặc ADMIN, lấy thêm thống kê
       if (user?.role === 'HR' || user?.role === 'ADMIN') {
         promises.push(api.get('/attendance/today-stats'));
+        promises.push(api.get('/leave-requests/stats'));
       }
 
       const results = await Promise.all(promises);
@@ -69,6 +83,9 @@ export default function Dashboard() {
       
       if (results[3]) {
         setTodayStats(results[3].data);
+      }
+      if (results[4]) {
+        setLeaveStats(results[4].data);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -318,15 +335,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Leave Balance by Type */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Số dư phép theo loại</h2>
-          <Link to="/leave-requests/create" className="btn btn-primary btn-sm flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Tạo đơn mới
-          </Link>
-        </div>
+      {/* Leave Balance by Type - Employees only */}
+      {!leaveStats && leaveBalance.length > 0 && (
+        <div className="card">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Số dư phép theo loại</h2>
+          </div>
         
         {leaveBalance.length === 0 ? (
           <p className="text-gray-600 text-center py-4">Chưa có dữ liệu</p>
@@ -361,6 +375,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      )}
 
       {/* Recent Leave Requests */}
       <div className="card">
@@ -374,11 +389,7 @@ export default function Dashboard() {
         {recentRequests.length === 0 ? (
           <div className="text-center py-8">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-4">Chưa có đơn nghỉ phép nào</p>
-            <Link to="/leave-requests/create" className="btn btn-primary inline-flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Tạo đơn mới
-            </Link>
+            <p className="text-gray-600">Chưa có đơn nghỉ phép nào</p>
           </div>
         ) : (
           <div className="space-y-3">
