@@ -26,15 +26,35 @@ export default function AttendanceScanner() {
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false); // Flag to prevent duplicate scans
+  const [gpsPermission, setGpsPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
 
   useEffect(() => {
     fetchTodayStatus();
+    checkGPSPermission();
     return () => {
       if (scanner) {
         scanner.stop().catch(console.error);
       }
     };
   }, []);
+
+  const checkGPSPermission = async () => {
+    if (!navigator.permissions || !navigator.geolocation) {
+      setGpsPermission('unknown');
+      return;
+    }
+    
+    try {
+      const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+      setGpsPermission(result.state as 'granted' | 'denied' | 'prompt');
+      
+      result.addEventListener('change', () => {
+        setGpsPermission(result.state as 'granted' | 'denied' | 'prompt');
+      });
+    } catch {
+      setGpsPermission('unknown');
+    }
+  };
 
   const fetchTodayStatus = async () => {
     try {
@@ -118,12 +138,56 @@ export default function AttendanceScanner() {
       const isCheckIn = !todayStatus?.hasCheckedIn;
       const endpoint = isCheckIn ? '/attendance/check-in' : '/attendance/check-out';
       
-      const response = await api.post(endpoint, { token });
+      // Get GPS location
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Trình duyệt không hỗ trợ GPS'));
+          return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          { 
+            enableHighAccuracy: true, 
+            timeout: 10000, 
+            maximumAge: 0 
+          }
+        );
+      });
+      
+      const { latitude, longitude } = position.coords;
+      
+      const response = await api.post(endpoint, { 
+        token,
+        latitude,
+        longitude,
+        location: 'Mobile App' // Optional: can add more details
+      });
       
       toast.success(response.data.message);
+      if (response.data.distance !== undefined) {
+        toast.info(`Khoảng cách từ văn phòng: ${response.data.distance}m`);
+      }
       await fetchTodayStatus(); // Refresh status
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      if (error instanceof GeolocationPositionError) {
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error('Bạn đã từ chối quyền truy cập vị trí. Vui lòng bật GPS trong cài đặt.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            toast.error('Không thể xác định vị trí. Vui lòng kiểm tra GPS.');
+            break;
+          case error.TIMEOUT:
+            toast.error('Hết thời gian chờ lấy vị trí. Vui lòng thử lại.');
+            break;
+        }
+      } else if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      }
     } finally {
       // Reset processing flag after a delay to allow status update
       setTimeout(() => setProcessing(false), 2000);
@@ -161,6 +225,37 @@ export default function AttendanceScanner() {
           {format(new Date(), "EEEE, dd MMMM yyyy", { locale: vi })}
         </p>
       </div>
+
+      {/* GPS Permission Warning */}
+      {gpsPermission === 'denied' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-red-900 mb-1">Cần quyền truy cập vị trí</h3>
+              <p className="text-sm text-red-700">
+                Hệ thống yêu cầu GPS để xác minh bạn đang ở trong phạm vi văn phòng. 
+                Vui lòng bật quyền truy cập vị trí trong cài đặt trình duyệt.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gpsPermission === 'prompt' && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-yellow-900 mb-1">Yêu cầu quyền GPS</h3>
+              <p className="text-sm text-yellow-700">
+                Khi bạn quét mã QR, trình duyệt sẽ yêu cầu quyền truy cập vị trí. 
+                Vui lòng cho phép để có thể điểm danh.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Info Card */}
       {user && (

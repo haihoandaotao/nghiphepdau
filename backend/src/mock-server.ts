@@ -43,6 +43,29 @@ const upload = multer({
   }
 });
 
+// Office location configuration for GPS validation
+const OFFICE_LOCATION = {
+  lat: 16.0544, // Latitude của văn phòng (ví dụ: Đà Nẵng)
+  lng: 108.2022, // Longitude của văn phòng
+  radiusMeters: 200 // Bán kính cho phép (200m)
+};
+
+// Haversine formula to calculate distance between two GPS coordinates
+const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+};
+
 // Email configuration
 const createEmailTransporter = () => {
   // Check if SMTP config exists
@@ -1160,8 +1183,23 @@ app.get('/api/attendance/qr-token', mockAuth, checkRole(['HR', 'ADMIN']), async 
 // Check-in
 app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
   try {
-    const { token, location } = req.body;
+    const { token, location, latitude, longitude } = req.body;
     const userId = req.user.id;
+    
+    // Validate GPS location
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: 'Vui lòng bật GPS để điểm danh' });
+    }
+    
+    const distance = calculateDistance(latitude, longitude, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+    
+    if (distance > OFFICE_LOCATION.radiusMeters) {
+      return res.status(403).json({ 
+        message: `Bạn phải ở trong phạm vi văn phòng để điểm danh (khoảng cách: ${Math.round(distance)}m)`,
+        distance: Math.round(distance),
+        maxDistance: OFFICE_LOCATION.radiusMeters
+      });
+    }
     
     // Validate token
     if (!validateAttendanceToken(token)) {
@@ -1183,11 +1221,12 @@ app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
     }
     
     const checkInTime = new Date();
+    const locationData = `${location || ''} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`;
     
     if (existingRecord) {
       // Update existing record
       existingRecord.checkInTime = checkInTime.toISOString();
-      existingRecord.checkInLocation = location;
+      existingRecord.checkInLocation = locationData;
       existingRecord.status = calculateWorkStatus(checkInTime, null);
     } else {
       // Create new record
@@ -1196,7 +1235,7 @@ app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
         userId,
         date: today,
         checkInTime: checkInTime.toISOString(),
-        checkInLocation: location,
+        checkInLocation: locationData,
         checkOutTime: null,
         checkOutLocation: null,
         status: calculateWorkStatus(checkInTime, null),
@@ -1211,6 +1250,7 @@ app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
       message: 'Check-in thành công',
       checkInTime: checkInTime.toISOString(),
       status: calculateWorkStatus(checkInTime, null),
+      distance: Math.round(distance),
     });
   } catch (error: any) {
     console.error('Check-in error:', error);
@@ -1221,8 +1261,23 @@ app.post('/api/attendance/check-in', mockAuth, async (req: any, res) => {
 // Check-out
 app.post('/api/attendance/check-out', mockAuth, async (req: any, res) => {
   try {
-    const { token, location } = req.body;
+    const { token, location, latitude, longitude } = req.body;
     const userId = req.user.id;
+    
+    // Validate GPS location
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: 'Vui lòng bật GPS để điểm danh' });
+    }
+    
+    const distance = calculateDistance(latitude, longitude, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+    
+    if (distance > OFFICE_LOCATION.radiusMeters) {
+      return res.status(403).json({ 
+        message: `Bạn phải ở trong phạm vi văn phòng để điểm danh (khoảng cách: ${Math.round(distance)}m)`,
+        distance: Math.round(distance),
+        maxDistance: OFFICE_LOCATION.radiusMeters
+      });
+    }
     
     // Validate token
     if (!validateAttendanceToken(token)) {
@@ -1250,9 +1305,10 @@ app.post('/api/attendance/check-out', mockAuth, async (req: any, res) => {
     const checkOutTime = new Date();
     const checkInTime = new Date(record.checkInTime);
     const workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+    const locationData = `${location || ''} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`;
     
     record.checkOutTime = checkOutTime.toISOString();
-    record.checkOutLocation = location;
+    record.checkOutLocation = locationData;
     record.workingHours = Math.round(workingHours * 100) / 100;
     record.status = calculateWorkStatus(checkInTime, checkOutTime);
     
@@ -1261,6 +1317,7 @@ app.post('/api/attendance/check-out', mockAuth, async (req: any, res) => {
       checkOutTime: checkOutTime.toISOString(),
       workingHours: record.workingHours,
       status: record.status,
+      distance: Math.round(distance),
     });
   } catch (error: any) {
     console.error('Check-out error:', error);
