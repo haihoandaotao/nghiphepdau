@@ -33,14 +33,14 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /pdf|doc|docx|jpg|jpeg|png|xlsx|xls/;
+    const allowedTypes = /pdf|doc|docx|jpg|jpeg|png|xlsx|xls|csv/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const mimetype = allowedTypes.test(file.mimetype) || file.mimetype === 'text/csv' || file.mimetype === 'application/csv';
     
-    if (extname && mimetype) {
+    if (extname || mimetype) {
       cb(null, true);
     } else {
-      cb(new Error('Chỉ chấp nhận file PDF, Word, Excel, JPG, PNG'));
+      cb(new Error('Chỉ chấp nhận file PDF, Word, Excel, CSV, JPG, PNG'));
     }
   }
 });
@@ -1006,9 +1006,18 @@ app.get('/api/departments', (req, res) => {
 // Import departments from CSV/Excel (must be before routes with :id param)
 app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload.single('file'), (req: any, res) => {
   try {
+    console.log('📥 Import request received');
+    
     if (!req.file) {
+      console.log('❌ No file uploaded');
       return res.status(400).json({ message: 'Vui lòng chọn file' });
     }
+
+    console.log('📄 File info:', {
+      filename: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
 
     const filePath = req.file.path;
     const fileExt = path.extname(req.file.originalname).toLowerCase();
@@ -1017,20 +1026,30 @@ app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload
     
     // Parse CSV
     if (fileExt === '.csv') {
+      console.log('📋 Parsing CSV file...');
       const fileContent = fs.readFileSync(filePath, 'utf-8');
+      console.log('File content preview:', fileContent.substring(0, 200));
+      
       rows = parse(fileContent, {
         columns: true,
         skip_empty_lines: true,
         trim: true,
         bom: true, // Handle UTF-8 BOM
       });
+      console.log(`✓ Parsed ${rows.length} rows`);
+      if (rows.length > 0) {
+        console.log('First row keys:', Object.keys(rows[0]));
+        console.log('First row data:', rows[0]);
+      }
     }
     // Parse Excel
     else if (['.xlsx', '.xls'].includes(fileExt)) {
+      console.log('📊 Parsing Excel file...');
       const workbook = XLSX.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       rows = XLSX.utils.sheet_to_json(sheet);
+      console.log(`✓ Parsed ${rows.length} rows from sheet: ${sheetName}`);
     } else {
       fs.unlinkSync(filePath); // Delete uploaded file
       return res.status(400).json({ message: 'Định dạng file không hỗ trợ. Chỉ chấp nhận CSV hoặc Excel' });
@@ -1053,6 +1072,8 @@ app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload
         const name = row['Tên phòng ban*'] || row['name'] || row['Name'] || '';
         const code = row['Mã phòng ban*'] || row['code'] || row['Code'] || '';
         const managerEmail = row['Email trưởng phòng'] || row['manager_email'] || row['Manager Email'] || '';
+
+        console.log(`Processing row ${index + 1}:`, { name, code, managerEmail });
 
         // Validation
         if (!name || !code) {

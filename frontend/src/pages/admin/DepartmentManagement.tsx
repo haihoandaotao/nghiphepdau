@@ -109,11 +109,13 @@ export default function DepartmentManagement() {
   };
 
   const handleDownloadTemplate = () => {
-    // Create CSV template
-    const headers = ['Tên phòng ban*,Mã phòng ban*,Email trưởng phòng'];
-    const sample = ['Phòng IT,IT,manager@company.com', 'Phòng Nhân sự,HR,hr@company.com'];
-    const csvContent = [headers, ...sample].join('\n');
+    // Create CSV template with proper encoding
+    const headers = 'Tên phòng ban*,Mã phòng ban*,Email trưởng phòng';
+    const sample1 = 'Phòng IT,IT,manager@test.com';
+    const sample2 = 'Phòng Nhân sự,HR,hr@test.com';
+    const csvContent = [headers, sample1, sample2].join('\n');
     
+    // Add UTF-8 BOM for proper Excel compatibility
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
