@@ -190,12 +190,33 @@ const mockAuth = (req: any, res: Response, next: any) => {
   if (!token) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
-  // Mock user from token (in real app, decode JWT)
+  
+  // Parse user ID from token (format: mock-jwt-token-{userId})
+  const userId = token.replace('mock-jwt-token-', '');
+  
+  // Find user in demo accounts
+  const demoUser = Object.values(demoAccounts).find((u: any) => u.id === userId);
+  if (demoUser) {
+    req.user = demoUser;
+    next();
+    return;
+  }
+  
+  // Find in regular users
+  const user = users.find((u: any) => u.id === userId);
+  if (user) {
+    const { password, ...userWithoutPassword } = user;
+    req.user = userWithoutPassword;
+    next();
+    return;
+  }
+  
+  // Default fallback
   req.user = {
-    id: '1',
+    id: userId,
     email: 'test@test.com',
     fullName: 'Test User',
-    role: 'ADMIN', // Default to ADMIN for testing, can be changed
+    role: 'ADMIN',
   };
   next();
 };
@@ -382,9 +403,18 @@ app.post('/api/auth/register', (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   
+  console.log('🔐 Login attempt:', { email, password });
+  
   // Check if it's a demo account
   if (demoAccounts[email]) {
     const demoUser = demoAccounts[email];
+    // Demo accounts accept password: Admin@123, Hr@123, Manager@123, Employee@123
+    const validPasswords = ['Admin@123', 'Hr@123', 'Manager@123', 'Employee@123'];
+    if (!validPasswords.includes(password)) {
+      console.log('❌ Invalid password for demo account');
+      return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+    }
+    console.log('✅ Demo account login successful');
     return res.json({
       message: 'Login successful',
       user: demoUser,
