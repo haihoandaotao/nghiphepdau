@@ -6,6 +6,8 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
+import * as XLSX from 'xlsx';
+import { parse } from 'csv-parse/sync';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -1057,6 +1059,123 @@ app.delete('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, r
   const { id } = req.params;
   departments = departments.filter(d => d.id !== id);
   res.json({ message: 'Department deleted' });
+});
+
+// Import departments from CSV/Excel
+app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload.single('file'), (req: any, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn file' });
+    }
+
+    const filePath = req.file.path;
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    
+    let rows: any[] = [];
+    
+    // Parse CSV
+    if (fileExt === '.csv') {
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      rows = parse(fileContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        bom: true, // Handle UTF-8 BOM
+      });
+    }
+    // Parse Excel
+    else if (['.xlsx', '.xls'].includes(fileExt)) {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      rows = XLSX.utils.sheet_to_json(sheet);
+    } else {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({ message: 'Định dạng file không hỗ trợ. Chỉ chấp nhận CSV hoặc Excel' });
+    }
+
+    if (rows.length === 0) {
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ message: 'File không có dữ liệu' });
+    }
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    rows.forEach((row: any, index: number) => {
+      try {
+        // Normalize column names (handle Vietnamese and English)
+        const name = row['Tên phòng ban*'] || row['name'] || row['Name'] || '';
+        const code = row['Mã phòng ban*'] || row['code'] || row['Code'] || '';
+        const managerEmail = row['Email trưởng phòng'] || row['manager_email'] || row['Manager Email'] || '';
+
+        // Validation
+        if (!name || !code) {
+          results.errors.push(`Dòng ${index + 2}: Thiếu tên hoặc mã phòng ban`);
+          results.failed++;
+          return;
+        }
+
+        // Check duplicate code
+        const existingDept = departments.find((d: any) => 
+          d.code.toUpperCase() === code.toString().toUpperCase()
+        );
+        if (existingDept) {
+          results.errors.push(`Dòng ${index + 2}: Mã phòng ban "${code}" đã tồn tại`);
+          results.failed++;
+          return;
+        }
+
+        // Find manager by email
+        let managerId = null;
+        if (managerEmail) {
+          const manager = users.find((u: any) => u.email === managerEmail);
+          if (!manager) {
+            results.errors.push(`Dòng ${index + 2}: Không tìm thấy user với email "${managerEmail}"`);
+            results.failed++;
+            return;
+          }
+          managerId = manager.id;
+        }
+
+        // Create department
+        const newDept = {
+          id: Date.now().toString() + Math.random(),
+          name: name.toString().trim(),
+          code: code.toString().toUpperCase().trim(),
+          managerId,
+          createdAt: new Date().toISOString(),
+        };
+
+        departments.push(newDept);
+        results.success++;
+      } catch (error: any) {
+        results.errors.push(`Dòng ${index + 2}: ${error.message}`);
+        results.failed++;
+      }
+    });
+
+    // Delete uploaded file
+    fs.unlinkSync(filePath);
+
+    const message = `Import hoàn tất: ${results.success} thành công, ${results.failed} thất bại`;
+    
+    res.json({
+      message,
+      success: results.success,
+      failed: results.failed,
+      errors: results.errors.slice(0, 10), // Limit errors to first 10
+    });
+  } catch (error: any) {
+    console.error('Import error:', error);
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: error.message || 'Có lỗi xảy ra khi import' });
+  }
 });
 
 // Holidays (HR/Admin can modify, all can view)

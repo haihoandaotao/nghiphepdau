@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Users, User } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, User, Upload, Download, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { toast } from 'react-toastify';
 
@@ -29,6 +29,9 @@ export default function DepartmentManagement() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
@@ -105,6 +108,58 @@ export default function DepartmentManagement() {
     });
   };
 
+  const handleDownloadTemplate = () => {
+    // Create CSV template
+    const headers = ['Tên phòng ban*,Mã phòng ban*,Email trưởng phòng'];
+    const sample = ['Phòng IT,IT,manager@company.com', 'Phòng Nhân sự,HR,hr@company.com'];
+    const csvContent = [headers, ...sample].join('\n');
+    
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'mau_import_phong_ban.csv';
+    link.click();
+    toast.success('Đã tải xuống file mẫu');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      if (!validTypes.includes(file.type) && !file.name.endsWith('.csv')) {
+        toast.error('Vui lòng chọn file CSV hoặc Excel');
+        return;
+      }
+      setImportFile(file);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.error('Vui lòng chọn file');
+      return;
+    }
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', importFile);
+
+    try {
+      const response = await api.post('/departments/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      
+      toast.success(response.data.message || 'Import thành công');
+      setShowImportModal(false);
+      setImportFile(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra khi import');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const filteredDepartments = departments.filter(
     (dept) =>
       dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,16 +170,25 @@ export default function DepartmentManagement() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Quản lý phòng ban</h1>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Thêm phòng ban
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <Upload className="w-5 h-5" />
+            Import
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Thêm phòng ban
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -197,6 +261,100 @@ export default function DepartmentManagement() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Import phòng ban</h2>
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Download template */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-900 mb-3">
+                    <strong>Bước 1:</strong> Tải xuống file mẫu và điền thông tin phòng ban
+                  </p>
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="btn btn-secondary w-full flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    Tải file mẫu (.csv)
+                  </button>
+                </div>
+
+                {/* Upload file */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 mb-3">
+                    <strong>Bước 2:</strong> Chọn file đã điền thông tin để import
+                  </p>
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileChange}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-lg file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-primary-50 file:text-primary-700
+                      hover:file:bg-primary-100
+                      cursor-pointer"
+                  />
+                  {importFile && (
+                    <p className="text-sm text-green-600 mt-2">
+                      ✓ Đã chọn: {importFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-yellow-900 font-semibold mb-2">Lưu ý:</p>
+                  <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+                    <li>File phải có định dạng CSV hoặc Excel (.xlsx, .xls)</li>
+                    <li>Các cột bắt buộc: Tên phòng ban, Mã phòng ban</li>
+                    <li>Email trưởng phòng phải tồn tại trong hệ thống</li>
+                    <li>Mã phòng ban không được trùng lặp</li>
+                  </ul>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleImport}
+                    disabled={!importFile || importing}
+                    className="btn btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {importing ? 'Đang import...' : 'Import ngay'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportFile(null);
+                    }}
+                    className="btn btn-secondary"
+                    disabled={importing}
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
