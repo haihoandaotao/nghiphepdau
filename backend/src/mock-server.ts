@@ -1003,65 +1003,7 @@ app.get('/api/departments', (req, res) => {
   res.json({ departments: deptWithManagers });
 });
 
-app.post('/api/departments', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
-  const newDept = {
-    id: Date.now().toString(),
-    ...req.body,
-    createdAt: new Date().toISOString(),
-  };
-  departments.push(newDept);
-  
-  // Populate manager info and count employees
-  const manager = newDept.managerId ? users.find((u: any) => u.id === newDept.managerId) : null;
-  const employeeCount = users.filter((u: any) => u.departmentId === newDept.id).length;
-  
-  const deptWithManager = {
-    ...newDept,
-    manager: manager ? {
-      id: manager.id,
-      fullName: manager.fullName,
-      email: manager.email
-    } : null,
-    _count: { employees: employeeCount }
-  };
-  
-  res.status(201).json({ message: 'Department created', department: deptWithManager });
-});
-
-app.put('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
-  const { id } = req.params;
-  const index = departments.findIndex(d => d.id === id);
-  if (index >= 0) {
-    departments[index] = { ...departments[index], ...req.body };
-    
-    // Populate manager info and count employees
-    const dept = departments[index];
-    const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
-    const employeeCount = users.filter((u: any) => u.departmentId === dept.id).length;
-    
-    const deptWithManager = {
-      ...dept,
-      manager: manager ? {
-        id: manager.id,
-        fullName: manager.fullName,
-        email: manager.email
-      } : null,
-      _count: { employees: employeeCount }
-    };
-    
-    res.json({ message: 'Department updated', department: deptWithManager });
-  } else {
-    res.status(404).json({ message: 'Department not found' });
-  }
-});
-
-app.delete('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
-  const { id } = req.params;
-  departments = departments.filter(d => d.id !== id);
-  res.json({ message: 'Department deleted' });
-});
-
-// Import departments from CSV/Excel
+// Import departments from CSV/Excel (must be before routes with :id param)
 app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload.single('file'), (req: any, res) => {
   try {
     if (!req.file) {
@@ -1176,6 +1118,64 @@ app.post('/api/departments/import', mockAuth, checkRole(['HR', 'ADMIN']), upload
     }
     res.status(500).json({ message: error.message || 'Có lỗi xảy ra khi import' });
   }
+});
+
+app.post('/api/departments', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  const newDept = {
+    id: Date.now().toString(),
+    ...req.body,
+    createdAt: new Date().toISOString(),
+  };
+  departments.push(newDept);
+  
+  // Populate manager info and count employees
+  const manager = newDept.managerId ? users.find((u: any) => u.id === newDept.managerId) : null;
+  const employeeCount = users.filter((u: any) => u.departmentId === newDept.id).length;
+  
+  const deptWithManager = {
+    ...newDept,
+    manager: manager ? {
+      id: manager.id,
+      fullName: manager.fullName,
+      email: manager.email
+    } : null,
+    _count: { employees: employeeCount }
+  };
+  
+  res.status(201).json({ message: 'Department created', department: deptWithManager });
+});
+
+app.put('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  const { id } = req.params;
+  const index = departments.findIndex(d => d.id === id);
+  if (index >= 0) {
+    departments[index] = { ...departments[index], ...req.body };
+    
+    // Populate manager info and count employees
+    const dept = departments[index];
+    const manager = dept.managerId ? users.find((u: any) => u.id === dept.managerId) : null;
+    const employeeCount = users.filter((u: any) => u.departmentId === dept.id).length;
+    
+    const deptWithManager = {
+      ...dept,
+      manager: manager ? {
+        id: manager.id,
+        fullName: manager.fullName,
+        email: manager.email
+      } : null,
+      _count: { employees: employeeCount }
+    };
+    
+    res.json({ message: 'Department updated', department: deptWithManager });
+  } else {
+    res.status(404).json({ message: 'Department not found' });
+  }
+});
+
+app.delete('/api/departments/:id', mockAuth, checkRole(['HR', 'ADMIN']), (req, res) => {
+  const { id } = req.params;
+  departments = departments.filter(d => d.id !== id);
+  res.json({ message: 'Department deleted' });
 });
 
 // Holidays (HR/Admin can modify, all can view)
