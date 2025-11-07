@@ -73,8 +73,9 @@ export default function AttendanceManagement() {
 
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
-      record.user?.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.user?.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+      record.user?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.user?.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.user?.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || record.status === statusFilter;
     const matchesDepartment = departmentFilter === 'ALL' || record.user?.department?.name === departmentFilter;
     return matchesSearch && matchesStatus && matchesDepartment;
@@ -141,6 +142,17 @@ export default function AttendanceManagement() {
     );
   };
 
+  if (loading && records.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -187,7 +199,7 @@ export default function AttendanceManagement() {
               <p className="text-sm text-gray-600">Giờ làm TB</p>
             </div>
             <p className="text-2xl font-bold text-blue-600">
-              {stats.averageWorkingHours.toFixed(1)}h
+              {(stats.averageWorkingHours || 0).toFixed(1)}h
             </p>
           </div>
         </div>
