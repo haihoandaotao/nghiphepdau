@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, XCircle, Plus, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, Plus, TrendingUp, QrCode, ClipboardCheck } from 'lucide-react';
 import api from '@/lib/axios';
 import { LeaveRequest } from '@/types';
 import { useAuthStore } from '@/store/authStore';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 interface LeaveBalance {
   leaveType: string;
@@ -12,10 +14,23 @@ interface LeaveBalance {
   remaining: number;
 }
 
+interface TodayAttendance {
+  date: string;
+  record: {
+    checkInTime: string | null;
+    checkOutTime: string | null;
+    status: string;
+    workingHours: number | null;
+  } | null;
+  hasCheckedIn: boolean;
+  hasCheckedOut: boolean;
+}
+
 export default function Dashboard() {
   const { user } = useAuthStore();
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
   const [recentRequests, setRecentRequests] = useState<LeaveRequest[]>([]);
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,13 +39,15 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const [balanceRes, requestsRes] = await Promise.all([
+      const [balanceRes, requestsRes, attendanceRes] = await Promise.all([
         api.get('/users/leave-balance'),
         api.get('/leave-requests/my-requests'),
+        api.get('/attendance/today'),
       ]);
       
       setLeaveBalance(balanceRes.data.leaveBalance || []);
       setRecentRequests((requestsRes.data.leaveRequests || []).slice(0, 5));
+      setTodayAttendance(attendanceRes.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -91,7 +108,69 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-gray-900">
           Xin chào, {user?.fullName}! 👋
         </h1>
-        <p className="text-gray-600 mt-1">Đây là thông tin nghỉ phép của bạn</p>
+        <p className="text-gray-600 mt-1">Tổng quan về chấm công và nghỉ phép của bạn</p>
+      </div>
+
+      {/* Attendance Today Section */}
+      <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border-primary-200">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5 text-primary-600" />
+              Điểm danh hôm nay
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {format(new Date(), 'EEEE, dd/MM/yyyy', { locale: vi })}
+            </p>
+          </div>
+          <Link
+            to="/attendance/scan"
+            className="btn btn-primary flex items-center gap-2 text-sm"
+          >
+            <QrCode className="w-4 h-4" />
+            Điểm danh
+          </Link>
+        </div>
+
+        {todayAttendance?.hasCheckedIn ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg p-4">
+              <p className="text-xs text-gray-600 mb-1">Check-in</p>
+              <p className="text-lg font-bold text-green-600">
+                {todayAttendance.record?.checkInTime
+                  ? format(new Date(todayAttendance.record.checkInTime), 'HH:mm:ss')
+                  : '-'}
+              </p>
+            </div>
+            <div className="bg-white rounded-lg p-4">
+              <p className="text-xs text-gray-600 mb-1">Check-out</p>
+              <p className="text-lg font-bold text-blue-600">
+                {todayAttendance.record?.checkOutTime
+                  ? format(new Date(todayAttendance.record.checkOutTime), 'HH:mm:ss')
+                  : 'Chưa check-out'}
+              </p>
+            </div>
+            <div className="bg-white rounded-lg p-4">
+              <p className="text-xs text-gray-600 mb-1">Trạng thái</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {todayAttendance.record?.status === 'PRESENT' && '✅ Đúng giờ'}
+                {todayAttendance.record?.status === 'LATE' && '⚠️ Đi muộn'}
+                {todayAttendance.record?.status === 'HALF_DAY' && '⏰ Nửa ngày'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6 bg-white rounded-lg">
+            <QrCode className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-600">Bạn chưa điểm danh hôm nay</p>
+            <Link
+              to="/attendance/scan"
+              className="inline-flex items-center gap-2 mt-3 text-primary-600 hover:text-primary-700 font-medium"
+            >
+              Điểm danh ngay <span>→</span>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}

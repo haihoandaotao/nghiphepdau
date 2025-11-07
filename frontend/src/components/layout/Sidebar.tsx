@@ -25,9 +25,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  // Dashboard - Trang tổng quan
+  const dashboardItem = { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] };
+
   // Menu chấm công
   const attendanceMenuItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
     { path: '/attendance/scan', label: 'Điểm danh', icon: QrCode, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
     { path: '/attendance/history', label: 'Lịch sử điểm danh', icon: ClipboardList, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
     { path: '/attendance/qr', label: 'Mã QR điểm danh', icon: QrCode, roles: ['HR', 'ADMIN'] },
@@ -70,6 +72,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
       
       <nav className="px-3 space-y-4">
+        {/* Dashboard */}
+        {user && dashboardItem.roles.includes(user.role) && (
+          <div>
+            <Link
+              to={dashboardItem.path}
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                isActive(dashboardItem.path)
+                  ? 'bg-primary-50 text-primary-700 font-medium'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              <span className="font-medium">{dashboardItem.label}</span>
+            </Link>
+          </div>
+        )}
+
         {/* Nhóm Chấm công */}
         <div>
           <h3 className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
